@@ -1,9 +1,12 @@
 from ultralytics import YOLO
 import cv2
-
+import torch
 import supervision as sv
 
 cap = cv2.VideoCapture(0)
+
+# select a device to run the model on for performance acceleration
+device = torch.device("mps")
 
 # Load the YOLOv8 model
 model = YOLO(
@@ -18,13 +21,21 @@ box_annotator = sv.BoxAnnotator(
 
 
 
-for result in model.track(source=0 , show=False, save=False, stream=True, verbose=False):
+for result in model.track(source=0 , show=False, save=False, stream=True, verbose=False, device=device):
 
     frame = result.orig_img
     
+    # Skip frames without detections
+    if result.boxes.id is None:
+        cv2.imshow("YOLOv8 Inference", frame)
+        continue
+
     # Convert the YOLOv8 results to Supervision Detections
     detections = sv.Detections.from_yolov8(result)
+
     
+    # assign tracker id to each detection
+    detections.tracker_id = result.boxes.id.cpu().numpy().astype(int)
     """
     Detections(xyxy=array([[     262.85,      28.521,      1242.8,      715.25]], dtype=float32), mask=None, class_id=array([0]), confidence=array([    0.83332], dtype=float32), tracker_id=None)
     """
@@ -32,7 +43,7 @@ for result in model.track(source=0 , show=False, save=False, stream=True, verbos
     # detections = detections[(detections.class_id != 60) & (detections.class_id != 0)]
 
     labels = [
-        f"{model.names[class_id]} {confidence:.2f}"
+        f"{tracker_id} {model.names[class_id]} {confidence:.2f}"
         for xyxy, mask, confidence, class_id, tracker_id
         in detections
     ]
@@ -44,26 +55,7 @@ for result in model.track(source=0 , show=False, save=False, stream=True, verbos
     cv2.imshow("YOLOv8 Inference", frame)
 
 
-# # Loop through the video frames
-# while cap.isOpened():
-#     # Read a frame from the video
-#     success, frame = cap.read()
 
-#     if not success:
-#         continue
-
-#     # Run YOLOv8 inference on the frame
-#     results = model.track(frame, verbose=False, stream=True)
-    
-#     # Visualize the results on the frame
-#     annotated_frame = results[0].plot()
-    
-#     # Display the annotated frame
-#     cv2.imshow("YOLOv8 Inference", annotated_frame)
-
-
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
 cap.release()
 cv2.destroyAllWindows()
 
