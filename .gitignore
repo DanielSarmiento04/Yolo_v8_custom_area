@@ -168,3 +168,5 @@ cython_debug/
 audios/*
 *.wav
 *.zip
+
+*.pt
